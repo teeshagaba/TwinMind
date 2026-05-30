@@ -1,22 +1,38 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: TwinMind AI - Digital Twin Platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: metrics
+    description: Infrastructure metrics
+  - name: predictions
+    description: AI failure predictions
+  - name: simulations
+    description: Digital twin simulations
+  - name: alerts
+    description: Real-time alerts
+  - name: reports
+    description: AI-generated reports
+  - name: recommendations
+    description: AI optimization recommendations
+  - name: admin
+    description: Admin panel operations
+  - name: openai
+    description: OpenAI AI chat operations
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +40,494 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthInput"
+      responses:
+        "201":
+          description: Registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthInput"
+      responses:
+        "200":
+          description: Logged in successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /metrics:
+    get:
+      operationId: getMetrics
+      tags: [metrics]
+      summary: Get current infrastructure metrics
+      responses:
+        "200":
+          description: Current metrics snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricsSnapshot"
+
+  /metrics/history:
+    get:
+      operationId: getMetricsHistory
+      tags: [metrics]
+      summary: Get metrics history for charts
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 60
+      responses:
+        "200":
+          description: Historical metrics
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MetricsSnapshot"
+
+  /metrics/services:
+    get:
+      operationId: getServices
+      tags: [metrics]
+      summary: Get active services status
+      responses:
+        "200":
+          description: Services list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServiceStatus"
+
+  /metrics/health-score:
+    get:
+      operationId: getHealthScore
+      tags: [metrics]
+      summary: Get overall infrastructure health score
+      responses:
+        "200":
+          description: Health score
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthScore"
+
+  /predictions:
+    get:
+      operationId: getPredictions
+      tags: [predictions]
+      summary: Get current AI failure predictions
+      responses:
+        "200":
+          description: Predictions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PredictionResult"
+
+  /predictions/history:
+    get:
+      operationId: getPredictionHistory
+      tags: [predictions]
+      summary: Get prediction history
+      responses:
+        "200":
+          description: Prediction history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PredictionResult"
+
+  /simulations:
+    get:
+      operationId: listSimulations
+      tags: [simulations]
+      summary: List simulation runs
+      responses:
+        "200":
+          description: List of simulations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Simulation"
+    post:
+      operationId: startSimulation
+      tags: [simulations]
+      summary: Start a new simulation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SimulationInput"
+      responses:
+        "201":
+          description: Simulation started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Simulation"
+
+  /simulations/active:
+    get:
+      operationId: getActiveSimulation
+      tags: [simulations]
+      summary: Get the currently active simulation
+      responses:
+        "200":
+          description: Active simulation or null
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Simulation"
+        "404":
+          description: No active simulation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /simulations/{id}/stop:
+    post:
+      operationId: stopSimulation
+      tags: [simulations]
+      summary: Stop a simulation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Simulation stopped
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Simulation"
+
+  /alerts:
+    get:
+      operationId: getAlerts
+      tags: [alerts]
+      summary: Get recent alerts
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Alerts list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Alert"
+
+  /alerts/{id}/acknowledge:
+    post:
+      operationId: acknowledgeAlert
+      tags: [alerts]
+      summary: Acknowledge an alert
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Alert acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Alert"
+
+  /reports:
+    get:
+      operationId: listReports
+      tags: [reports]
+      summary: List generated reports
+      responses:
+        "200":
+          description: Reports list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Report"
+    post:
+      operationId: generateReport
+      tags: [reports]
+      summary: Generate a new AI report
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportInput"
+      responses:
+        "201":
+          description: Report generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+
+  /reports/{id}:
+    get:
+      operationId: getReport
+      tags: [reports]
+      summary: Get a specific report
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /recommendations:
+    get:
+      operationId: getRecommendations
+      tags: [recommendations]
+      summary: Get AI optimization recommendations
+      responses:
+        "200":
+          description: Recommendations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Recommendation"
+
+  /admin/users:
+    get:
+      operationId: adminListUsers
+      tags: [admin]
+      summary: List all users (admin only)
+      responses:
+        "200":
+          description: Users list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+
+  /admin/stats:
+    get:
+      operationId: adminGetStats
+      tags: [admin]
+      summary: Get platform-wide stats
+      responses:
+        "200":
+          description: Platform stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+
+  /openai/conversations:
+    get:
+      operationId: listOpenaiConversations
+      tags: [openai]
+      summary: List all conversations
+      responses:
+        "200":
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OpenaiConversation"
+    post:
+      operationId: createOpenaiConversation
+      tags: [openai]
+      summary: Create a new conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpenaiConversationInput"
+      responses:
+        "201":
+          description: Created conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiConversation"
+
+  /openai/conversations/{id}:
+    get:
+      operationId: getOpenaiConversation
+      tags: [openai]
+      summary: Get conversation with messages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation with messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiConversationWithMessages"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiError"
+    delete:
+      operationId: deleteOpenaiConversation
+      tags: [openai]
+      summary: Delete a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiError"
+
+  /openai/conversations/{id}/messages:
+    get:
+      operationId: listOpenaiMessages
+      tags: [openai]
+      summary: List messages in a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OpenaiMessage"
+    post:
+      operationId: sendOpenaiMessage
+      tags: [openai]
+      summary: Send a text message and receive a streaming text response
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpenaiMessageInput"
+      responses:
+        "200":
+          description: SSE stream of assistant text chunks
+          content:
+            text/event-stream: {}
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +538,453 @@ components:
       required:
         - status
 
+    ApiError:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    AuthInput:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+      required:
+        - email
+        - password
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+      required:
+        - token
+        - user
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        role:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - email
+        - role
+        - createdAt
+
+    MetricsSnapshot:
+      type: object
+      properties:
+        id:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        cpuUsage:
+          type: number
+        memoryUsage:
+          type: number
+        diskUsage:
+          type: number
+        apiLatency:
+          type: number
+        errorRate:
+          type: number
+        requestThroughput:
+          type: number
+        activeServices:
+          type: integer
+        uptime:
+          type: number
+        networkIn:
+          type: number
+        networkOut:
+          type: number
+        simulationMode:
+          type: ["string", "null"]
+      required:
+        - id
+        - timestamp
+        - cpuUsage
+        - memoryUsage
+        - diskUsage
+        - apiLatency
+        - errorRate
+        - requestThroughput
+        - activeServices
+        - uptime
+        - networkIn
+        - networkOut
+        - simulationMode
+
+    ServiceStatus:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+        status:
+          type: string
+        cpuUsage:
+          type: number
+        memoryUsage:
+          type: number
+        latency:
+          type: number
+        uptime:
+          type: number
+        replicas:
+          type: integer
+      required:
+        - id
+        - name
+        - type
+        - status
+        - cpuUsage
+        - memoryUsage
+        - latency
+        - uptime
+        - replicas
+
+    HealthScore:
+      type: object
+      properties:
+        score:
+          type: number
+        grade:
+          type: string
+        components:
+          type: object
+          properties:
+            cpu:
+              type: number
+            memory:
+              type: number
+            latency:
+              type: number
+            errorRate:
+              type: number
+            uptime:
+              type: number
+          required:
+            - cpu
+            - memory
+            - latency
+            - errorRate
+            - uptime
+      required:
+        - score
+        - grade
+        - components
+
+    PredictionResult:
+      type: object
+      properties:
+        id:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        riskScore:
+          type: number
+        failureProbability:
+          type: number
+        crashProbability:
+          type: number
+        overloadProbability:
+          type: number
+        confidenceScore:
+          type: number
+        riskLevel:
+          type: string
+        factors:
+          type: array
+          items:
+            type: string
+        recommendation:
+          type: string
+      required:
+        - id
+        - timestamp
+        - riskScore
+        - failureProbability
+        - crashProbability
+        - overloadProbability
+        - confidenceScore
+        - riskLevel
+        - factors
+        - recommendation
+
+    Simulation:
+      type: object
+      properties:
+        id:
+          type: integer
+        mode:
+          type: string
+        status:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        stoppedAt:
+          type: ["string", "null"]
+          format: date-time
+        userId:
+          type: ["integer", "null"]
+      required:
+        - id
+        - mode
+        - status
+        - startedAt
+        - stoppedAt
+        - userId
+
+    SimulationInput:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum:
+            - normal
+            - high_traffic
+            - database_failure
+            - server_crash
+            - api_overload
+            - ddos_attack
+            - memory_leak
+      required:
+        - mode
+
+    Alert:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        severity:
+          type: string
+        title:
+          type: string
+        message:
+          type: string
+        acknowledged:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        service:
+          type: ["string", "null"]
+      required:
+        - id
+        - type
+        - severity
+        - title
+        - message
+        - acknowledged
+        - createdAt
+        - service
+
+    Report:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        title:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        userId:
+          type: ["integer", "null"]
+      required:
+        - id
+        - type
+        - title
+        - content
+        - createdAt
+        - userId
+
+    ReportInput:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+            - incident
+            - health
+            - optimization
+            - deployment_risk
+            - root_cause
+      required:
+        - type
+
+    Recommendation:
+      type: object
+      properties:
+        id:
+          type: string
+        category:
+          type: string
+        priority:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        impact:
+          type: string
+        effort:
+          type: string
+        metric:
+          type: string
+        currentValue:
+          type: number
+        targetValue:
+          type: number
+      required:
+        - id
+        - category
+        - priority
+        - title
+        - description
+        - impact
+        - effort
+        - metric
+        - currentValue
+        - targetValue
+
+    AdminStats:
+      type: object
+      properties:
+        totalUsers:
+          type: integer
+        totalSimulations:
+          type: integer
+        totalReports:
+          type: integer
+        totalAlerts:
+          type: integer
+        activeSimulations:
+          type: integer
+        aiRequestsToday:
+          type: integer
+      required:
+        - totalUsers
+        - totalSimulations
+        - totalReports
+        - totalAlerts
+        - activeSimulations
+        - aiRequestsToday
+
+    OpenaiConversation:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        mode:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - mode
+        - createdAt
+
+    OpenaiMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+        conversationId:
+          type: integer
+        role:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - conversationId
+        - role
+        - content
+        - createdAt
+
+    OpenaiConversationInput:
+      type: object
+      properties:
+        title:
+          type: string
+        mode:
+          type: string
+      required:
+        - title
+
+    OpenaiMessageInput:
+      type: object
+      properties:
+        content:
+          type: string
+        mode:
+          type: string
+      required:
+        - content
+
+    OpenaiConversationWithMessages:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        mode:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/OpenaiMessage"
+      required:
+        - id
+        - title
+        - mode
+        - createdAt
+        - messages
+
+    OpenaiError:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error

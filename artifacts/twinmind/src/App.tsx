@@ -1,26 +1,71 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import "@/lib/auth"; // Initialize auth token getter
+import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider, useAuth } from "@/hooks/use-auth";
+import { ProtectedRoute, Layout } from "@/components/layout";
 import NotFound from "@/pages/not-found";
+
+import Login from "@/pages/login";
+import Register from "@/pages/register";
+import Dashboard from "@/pages/dashboard";
+import DigitalTwin from "@/pages/digital-twin";
+import Simulation from "@/pages/simulation";
+import Predictions from "@/pages/predictions";
+import Copilot from "@/pages/copilot";
+import Reports from "@/pages/reports";
+import Admin from "@/pages/admin";
 
 const queryClient = new QueryClient();
 
-function Home() {
-  return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gray-50">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold text-gray-900">Replit Agent is building...</h1>
-        <p className="mt-2 text-sm text-gray-600">Your app will appear here once it's ready.</p>
-      </div>
-    </div>
-  );
+function RootRedirect() {
+  const { isAuthenticated, isLoading } = useAuth();
+  
+  if (isLoading) return null;
+  
+  if (isAuthenticated) {
+    return <Redirect to="/dashboard" />;
+  } else {
+    return <Redirect to="/login" />;
+  }
 }
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Home} />
+      <Route path="/" component={RootRedirect} />
+      <Route path="/login" component={Login} />
+      <Route path="/register" component={Register} />
+      
+      <Route path="/dashboard">
+        <ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>
+      </Route>
+      
+      <Route path="/digital-twin">
+        <ProtectedRoute><Layout><DigitalTwin /></Layout></ProtectedRoute>
+      </Route>
+      
+      <Route path="/simulation">
+        <ProtectedRoute><Layout><Simulation /></Layout></ProtectedRoute>
+      </Route>
+      
+      <Route path="/predictions">
+        <ProtectedRoute><Layout><Predictions /></Layout></ProtectedRoute>
+      </Route>
+      
+      <Route path="/copilot">
+        <ProtectedRoute><Layout><Copilot /></Layout></ProtectedRoute>
+      </Route>
+      
+      <Route path="/reports">
+        <ProtectedRoute><Layout><Reports /></Layout></ProtectedRoute>
+      </Route>
+      
+      <Route path="/admin">
+        <ProtectedRoute><Layout><Admin /></Layout></ProtectedRoute>
+      </Route>
+      
       <Route component={NotFound} />
     </Switch>
   );
@@ -31,7 +76,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
+          <AuthProvider>
+            <Router />
+          </AuthProvider>
         </WouterRouter>
         <Toaster />
       </TooltipProvider>
@@ -40,3 +87,4 @@ function App() {
 }
 
 export default App;
+
