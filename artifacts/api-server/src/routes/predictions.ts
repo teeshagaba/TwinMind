@@ -1,12 +1,12 @@
 import { Router } from "express";
-import { db, predictionsTable, metricsTable } from "@workspace/db";
+import { db, predictionsTable } from "@workspace/db";
 import { desc } from "drizzle-orm";
 import { generateMetrics, predictFailure } from "../lib/metricsEngine";
 
 const router = Router();
 
 router.get("/predictions", async (_req, res): Promise<void> => {
-  const m = generateMetrics();
+  const m = await generateMetrics();
   const p = predictFailure(m);
   const [row] = await db.insert(predictionsTable).values({
     ...p,

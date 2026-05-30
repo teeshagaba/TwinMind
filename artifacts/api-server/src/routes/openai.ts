@@ -82,14 +82,13 @@ router.post("/openai/conversations/:id/messages", async (req, res): Promise<void
   const history = await db.select().from(messagesTable).where(eq(messagesTable.conversationId, id)).orderBy(messagesTable.createdAt);
 
   // Get current infra context for infrastructure-related modes
-  const infraContext = ["infrastructure", "devops", "architect", "security"].includes(mode)
-    ? (() => {
-        const m = generateMetrics();
-        const p = predictFailure(m);
-        const simMode = getSimulationMode();
-        return `\n\nCurrent Infrastructure Context:\n- CPU: ${m.cpuUsage.toFixed(1)}%, Memory: ${m.memoryUsage.toFixed(1)}%, Latency: ${m.apiLatency.toFixed(0)}ms, Error Rate: ${m.errorRate.toFixed(2)}%\n- Risk Score: ${p.riskScore}/100, Risk Level: ${p.riskLevel}\n- Active Simulation: ${simMode ?? "none"}\n`;
-      })()
-    : "";
+  let infraContext = "";
+  if (["infrastructure", "devops", "architect", "security"].includes(mode)) {
+    const m = await generateMetrics();
+    const p = predictFailure(m);
+    const simMode = getSimulationMode();
+    infraContext = `\n\nCurrent Real-Time Infrastructure Context:\n- CPU: ${m.cpuUsage.toFixed(1)}%, Memory: ${m.memoryUsage.toFixed(1)}%, Disk: ${m.diskUsage.toFixed(1)}%\n- API Latency (P95): ${m.apiLatency}ms, Error Rate: ${m.errorRate.toFixed(2)}%, Throughput: ${m.requestThroughput.toFixed(1)} req/s\n- Network In: ${m.networkIn.toFixed(1)} KB/s, Network Out: ${m.networkOut.toFixed(1)} KB/s\n- Risk Score: ${p.riskScore}/100 (${p.riskLevel}), Active Simulation: ${simMode ?? "none"}\n- Factors: ${p.factors.join("; ")}\n`;
+  }
 
   const systemPrompt = (MODE_SYSTEM_PROMPTS[mode] ?? MODE_SYSTEM_PROMPTS.general) + infraContext;
 

@@ -6,7 +6,7 @@ import { generateMetrics, generateServices, getHealthScore } from "../lib/metric
 const router = Router();
 
 async function getCurrentMetrics(_req: any, res: any): Promise<void> {
-  const m = generateMetrics();
+  const m = await generateMetrics();
   const [row] = await db.insert(metricsTable).values({
     ...m,
     timestamp: new Date(),
@@ -24,12 +24,12 @@ router.get("/metrics/history", async (req, res): Promise<void> => {
 });
 
 router.get("/metrics/services", async (_req, res): Promise<void> => {
-  const services = generateServices();
+  const services = await generateServices();
   res.json(services);
 });
 
 router.get("/metrics/health-score", async (_req, res): Promise<void> => {
-  const m = generateMetrics();
+  const m = await generateMetrics();
   const score = getHealthScore(m);
   res.json(score);
 });

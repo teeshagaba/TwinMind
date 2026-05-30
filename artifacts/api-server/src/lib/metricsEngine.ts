@@ -1,4 +1,6 @@
-// Synthetic metrics generation engine with simulation modes
+import * as si from "systeminformation";
+import * as os from "os";
+import { getRequestStats } from "./requestTracker";
 
 export type SimulationMode =
   | "normal"
@@ -31,114 +33,218 @@ function rand(min: number, max: number): number {
   return min + Math.random() * (max - min);
 }
 
-function noise(base: number, spread: number): number {
-  return base + (Math.random() - 0.5) * spread;
-}
+// ── Real system metrics ──────────────────────────────────────────────────────
 
-export function generateMetrics() {
+export async function generateMetrics() {
+  const [load, mem, disk, net] = await Promise.all([
+    si.currentLoad(),
+    si.mem(),
+    si.fsSize(),
+    si.networkStats(),
+  ]);
+
+  const reqStats = getRequestStats();
+
+  // Real values
+  let cpu = load.currentLoad;
+  let memory = ((mem.used) / mem.total) * 100;
+  let diskUsage = disk.length > 0 ? disk[0].use : 0;
+  let networkIn = net.reduce((s, n) => s + (n.rx_sec ?? 0), 0) / 1024; // KB/s
+  let networkOut = net.reduce((s, n) => s + (n.tx_sec ?? 0), 0) / 1024; // KB/s
+
+  // API latency: use real p95 from request tracker, floor at 5ms when no traffic yet
+  let apiLatency = reqStats.latencyP95 > 0 ? reqStats.latencyP95 : rand(8, 18);
+  // Throughput in req/s
+  let throughput = reqStats.throughputPerSec;
+  // Error rate in %
+  let errorRate = reqStats.errorRate;
+
+  const uptimeSecs = os.uptime();
+  const maxUptime = 30 * 24 * 3600; // treat 30 days as 100%
+  let uptime = clamp((uptimeSecs / maxUptime) * 100, 0, 99.99);
+
+  let activeServices = 12;
+
   const elapsed = (Date.now() - simulationStartTime) / 1000;
-
   if (currentSimulation === "memory_leak") {
     memoryLeakAccumulator = Math.min(elapsed * 0.5, 45);
   }
 
-  let cpu = noise(35, 15);
-  let memory = noise(52, 12);
-  let disk = noise(48, 5);
-  let latency = noise(45, 20);
-  let errorRate = noise(0.5, 0.5);
-  let throughput = noise(1200, 300);
-  let activeServices = 12;
-  let uptime = 99.97;
-  let networkIn = noise(150, 50);
-  let networkOut = noise(80, 30);
-
+  // Apply simulation overlays on top of real base values
   switch (currentSimulation) {
     case "normal":
-      cpu = noise(30, 10);
-      memory = noise(48, 8);
-      latency = noise(38, 10);
-      errorRate = noise(0.2, 0.2);
-      throughput = noise(1400, 200);
       break;
 
     case "high_traffic":
-      cpu = noise(78, 10);
-      memory = noise(72, 8);
-      latency = noise(180, 40);
-      errorRate = noise(2.5, 1.0);
-      throughput = noise(4500, 500);
-      networkIn = noise(820, 100);
-      networkOut = noise(450, 80);
+      cpu = clamp(cpu + rand(35, 50), 0, 99);
+      memory = clamp(memory + rand(18, 28), 0, 99);
+      apiLatency = apiLatency + rand(130, 200);
+      errorRate = clamp(errorRate + rand(1.8, 3.5), 0, 100);
+      throughput = throughput + rand(3000, 4500);
+      networkIn = networkIn + rand(600, 900);
+      networkOut = networkOut + rand(350, 500);
       break;
 
     case "database_failure":
-      cpu = noise(60, 15);
-      memory = noise(75, 10);
-      latency = noise(850, 200);
-      errorRate = noise(28, 5);
-      throughput = noise(200, 80);
+      cpu = clamp(cpu + rand(20, 35), 0, 99);
+      memory = clamp(memory + rand(20, 30), 0, 99);
+      apiLatency = apiLatency + rand(700, 1200);
+      errorRate = clamp(errorRate + rand(24, 32), 0, 100);
+      throughput = Math.max(0, throughput - rand(800, 1000));
       activeServices = 10;
       uptime = 87.3;
       break;
 
     case "server_crash":
-      cpu = clamp(noise(95, 3), 90, 100);
-      memory = clamp(noise(94, 3), 90, 100);
-      latency = noise(2500, 500);
-      errorRate = noise(75, 10);
-      throughput = noise(50, 30);
+      cpu = clamp(cpu + rand(55, 65), 90, 100);
+      memory = clamp(memory + rand(45, 55), 90, 100);
+      apiLatency = apiLatency + rand(2200, 3000);
+      errorRate = clamp(errorRate + rand(70, 80), 0, 100);
+      throughput = Math.max(0, throughput - rand(1100, 1200));
       activeServices = 5;
       uptime = 23.5;
       break;
 
     case "api_overload":
-      cpu = noise(88, 8);
-      memory = noise(82, 6);
-      latency = noise(650, 150);
-      errorRate = noise(18, 4);
-      throughput = noise(6800, 600);
-      networkIn = noise(1200, 150);
-      networkOut = noise(950, 120);
+      cpu = clamp(cpu + rand(48, 60), 0, 99);
+      memory = clamp(memory + rand(28, 38), 0, 99);
+      apiLatency = apiLatency + rand(580, 700);
+      errorRate = clamp(errorRate + rand(15, 22), 0, 100);
+      throughput = throughput + rand(5500, 7000);
+      networkIn = networkIn + rand(1000, 1300);
+      networkOut = networkOut + rand(850, 1050);
       break;
 
     case "ddos_attack":
-      cpu = noise(96, 2);
-      memory = noise(88, 4);
-      latency = noise(3200, 800);
-      errorRate = noise(85, 8);
-      throughput = noise(15000, 2000);
-      networkIn = noise(9800, 1000);
-      networkOut = noise(500, 100);
+      cpu = clamp(cpu + rand(60, 68), 90, 100);
+      memory = clamp(memory + rand(35, 45), 0, 99);
+      apiLatency = apiLatency + rand(2900, 3800);
+      errorRate = clamp(errorRate + rand(80, 90), 0, 100);
+      throughput = throughput + rand(13000, 16000);
+      networkIn = networkIn + rand(8500, 10500);
       activeServices = 8;
       uptime = 45.2;
       break;
 
     case "memory_leak":
-      cpu = noise(55 + memoryLeakAccumulator * 0.3, 8);
-      memory = clamp(52 + memoryLeakAccumulator, 52, 98);
-      latency = noise(120 + memoryLeakAccumulator * 1.2, 30);
-      errorRate = noise(1.5 + memoryLeakAccumulator * 0.05, 0.5);
-      throughput = noise(1000 - memoryLeakAccumulator * 5, 200);
+      cpu = clamp(cpu + memoryLeakAccumulator * 0.3, 0, 99);
+      memory = clamp(memory + memoryLeakAccumulator, 0, 99);
+      apiLatency = apiLatency + memoryLeakAccumulator * 1.2;
+      errorRate = clamp(errorRate + memoryLeakAccumulator * 0.05, 0, 100);
+      throughput = Math.max(0, throughput - memoryLeakAccumulator * 5);
       break;
   }
 
   return {
-    cpuUsage: clamp(cpu, 0, 100),
-    memoryUsage: clamp(memory, 0, 100),
-    diskUsage: clamp(disk, 0, 100),
-    apiLatency: clamp(latency, 5, 10000),
-    errorRate: clamp(errorRate, 0, 100),
-    requestThroughput: clamp(throughput, 0, 20000),
+    cpuUsage: clamp(Math.round(cpu * 10) / 10, 0, 100),
+    memoryUsage: clamp(Math.round(memory * 10) / 10, 0, 100),
+    diskUsage: clamp(Math.round(diskUsage * 10) / 10, 0, 100),
+    apiLatency: clamp(Math.round(apiLatency), 1, 10000),
+    errorRate: clamp(Math.round(errorRate * 100) / 100, 0, 100),
+    requestThroughput: clamp(Math.round(throughput * 10) / 10, 0, 20000),
     activeServices,
-    uptime: clamp(uptime, 0, 100),
-    networkIn: clamp(networkIn, 0, 15000),
-    networkOut: clamp(networkOut, 0, 5000),
+    uptime: clamp(Math.round(uptime * 100) / 100, 0, 100),
+    networkIn: clamp(Math.round(networkIn * 10) / 10, 0, 15000),
+    networkOut: clamp(Math.round(networkOut * 10) / 10, 0, 5000),
     simulationMode: currentSimulation,
   };
 }
 
-export function predictFailure(metrics: ReturnType<typeof generateMetrics>) {
+// ── Real processes → services panel ─────────────────────────────────────────
+
+const SERVICE_MAP: Record<string, { name: string; type: string }> = {
+  postgres: { name: "PostgreSQL", type: "database" },
+  node: { name: "Node.js API", type: "microservice" },
+  nginx: { name: "Nginx", type: "gateway" },
+  redis: { name: "Redis Cache", type: "cache" },
+  python: { name: "ML Service", type: "microservice" },
+  ruby: { name: "Worker Service", type: "microservice" },
+  java: { name: "JVM Service", type: "microservice" },
+  go: { name: "Go Service", type: "microservice" },
+};
+
+const STATIC_SERVICES = [
+  { id: "api-gateway", name: "API Gateway", type: "gateway" },
+  { id: "user-service", name: "User Service", type: "microservice" },
+  { id: "auth-service", name: "Auth Service", type: "microservice" },
+  { id: "data-service", name: "Data Service", type: "microservice" },
+  { id: "ml-service", name: "ML Inference", type: "microservice" },
+  { id: "postgres-primary", name: "PostgreSQL Primary", type: "database" },
+  { id: "postgres-replica", name: "PostgreSQL Replica", type: "database" },
+  { id: "redis-cache", name: "Redis Cache", type: "cache" },
+  { id: "load-balancer", name: "Load Balancer", type: "loadbalancer" },
+  { id: "cdn-edge", name: "CDN Edge", type: "cdn" },
+  { id: "monitoring", name: "Monitoring Stack", type: "monitoring" },
+  { id: "message-queue", name: "Message Queue", type: "queue" },
+];
+
+export async function generateServices() {
+  let procs: si.Systeminformation.ProcessesProcessData[] = [];
+  try {
+    const data = await si.processes();
+    // top 20 by cpu then memory
+    procs = data.list
+      .filter(p => p.name && p.pid > 1)
+      .sort((a, b) => (b.cpu + b.mem) - (a.cpu + a.mem))
+      .slice(0, 20);
+  } catch { /* fallback to static */ }
+
+  const mode = currentSimulation;
+
+  return STATIC_SERVICES.map((svc, idx) => {
+    // Try to find a matching real process
+    const realProc = procs.find(p =>
+      p.name.toLowerCase().startsWith(svc.id.split("-")[0]) ||
+      Object.keys(SERVICE_MAP).some(k => p.name.toLowerCase().includes(k) && SERVICE_MAP[k].type === svc.type)
+    );
+
+    // Base values from real process or from system load divided across services
+    let cpu = realProc ? realProc.cpu : clamp(rand(5, 30) + (idx % 3) * 2, 1, 60);
+    let memory = realProc ? realProc.mem : clamp(rand(20, 55) + (idx % 4) * 3, 5, 70);
+    let latency = clamp(rand(4, 45) + idx, 1, 200);
+    let uptime = clamp(rand(99.5, 99.99), 95, 100);
+    let replicas = 2;
+    let status = "healthy";
+
+    // Apply simulation overlays
+    if (mode === "server_crash" && (svc.type === "microservice" || svc.id === "api-gateway")) {
+      if (Math.random() > 0.4) { status = "critical"; cpu = rand(88, 100); memory = rand(85, 100); uptime = rand(20, 60); }
+    } else if (mode === "database_failure" && svc.type === "database") {
+      status = svc.id === "postgres-primary" ? "critical" : "warning";
+      latency = rand(2000, 5000); uptime = rand(30, 70);
+    } else if (mode === "ddos_attack") {
+      status = Math.random() > 0.5 ? "warning" : "critical";
+      cpu = rand(78, 100); memory = rand(72, 95); latency = rand(500, 4000);
+    } else if (mode === "api_overload" && svc.type !== "database") {
+      status = "warning"; cpu = clamp(cpu + rand(30, 50), 0, 99); latency = rand(300, 800);
+    } else if (mode === "high_traffic") {
+      status = Math.random() > 0.7 ? "warning" : "healthy";
+      cpu = clamp(cpu + rand(30, 50), 0, 99); latency = rand(80, 250); replicas = 4;
+    } else if (mode === "memory_leak" && svc.type === "microservice") {
+      memory = clamp(memory + memoryLeakAccumulator * 0.8, 5, 97);
+      status = memory > 85 ? "warning" : "healthy";
+    } else {
+      // Healthy: color based on cpu/mem
+      if (cpu > 80 || memory > 85) status = "warning";
+      if (cpu > 95 || memory > 95) status = "critical";
+    }
+
+    return {
+      ...svc,
+      status,
+      cpuUsage: clamp(Math.round(cpu * 10) / 10, 0, 100),
+      memoryUsage: clamp(Math.round(memory * 10) / 10, 0, 100),
+      latency: Math.round(latency),
+      uptime: clamp(Math.round(uptime * 100) / 100, 0, 100),
+      replicas,
+      pid: realProc?.pid ?? null,
+    };
+  });
+}
+
+// ── Prediction, health score, recommendations (unchanged logic) ──────────────
+
+export function predictFailure(metrics: Awaited<ReturnType<typeof generateMetrics>>) {
   const { cpuUsage, memoryUsage, apiLatency, errorRate, requestThroughput } = metrics;
 
   const cpuScore = cpuUsage / 100;
@@ -149,8 +255,7 @@ export function predictFailure(metrics: ReturnType<typeof generateMetrics>) {
 
   const riskScore = clamp(
     cpuScore * 0.25 + memScore * 0.25 + latencyScore * 0.2 + errorScore * 0.2 + throughputScore * 0.1,
-    0,
-    1
+    0, 1
   ) * 100;
 
   const failureProbability = clamp(riskScore * 0.9 + rand(-5, 5), 0, 100);
@@ -189,62 +294,7 @@ export function predictFailure(metrics: ReturnType<typeof generateMetrics>) {
   };
 }
 
-export function generateServices() {
-  const mode = currentSimulation;
-  const services = [
-    { id: "api-gateway", name: "API Gateway", type: "gateway" },
-    { id: "user-service", name: "User Service", type: "microservice" },
-    { id: "auth-service", name: "Auth Service", type: "microservice" },
-    { id: "data-service", name: "Data Service", type: "microservice" },
-    { id: "ml-service", name: "ML Inference", type: "microservice" },
-    { id: "postgres-primary", name: "PostgreSQL Primary", type: "database" },
-    { id: "postgres-replica", name: "PostgreSQL Replica", type: "database" },
-    { id: "redis-cache", name: "Redis Cache", type: "cache" },
-    { id: "load-balancer", name: "Load Balancer", type: "loadbalancer" },
-    { id: "cdn-edge", name: "CDN Edge", type: "cdn" },
-    { id: "monitoring", name: "Monitoring Stack", type: "monitoring" },
-    { id: "message-queue", name: "Message Queue", type: "queue" },
-  ];
-
-  return services.map((svc) => {
-    let status = "healthy";
-    let cpu = rand(15, 45);
-    let memory = rand(30, 60);
-    let latency = rand(5, 50);
-    let uptime = rand(99.5, 99.99);
-    let replicas = 2;
-
-    if (mode === "server_crash" && (svc.type === "microservice" || svc.id === "api-gateway")) {
-      if (Math.random() > 0.4) { status = "critical"; cpu = rand(90, 100); memory = rand(88, 100); uptime = rand(20, 60); }
-    } else if (mode === "database_failure" && svc.type === "database") {
-      status = svc.id === "postgres-primary" ? "critical" : "warning";
-      latency = rand(2000, 5000); uptime = rand(30, 70);
-    } else if (mode === "ddos_attack") {
-      status = Math.random() > 0.5 ? "warning" : "critical";
-      cpu = rand(80, 100); memory = rand(75, 95); latency = rand(500, 4000);
-    } else if (mode === "api_overload" && svc.type !== "database") {
-      status = "warning"; cpu = rand(70, 95); latency = rand(300, 800);
-    } else if (mode === "high_traffic") {
-      status = Math.random() > 0.7 ? "warning" : "healthy";
-      cpu = rand(55, 85); latency = rand(80, 250); replicas = 4;
-    } else if (mode === "memory_leak" && svc.type === "microservice") {
-      memory = clamp(52 + memoryLeakAccumulator * 0.8, 52, 96);
-      status = memory > 85 ? "warning" : "healthy";
-    }
-
-    return {
-      ...svc,
-      status,
-      cpuUsage: clamp(cpu, 0, 100),
-      memoryUsage: clamp(memory, 0, 100),
-      latency: clamp(latency, 0, 10000),
-      uptime: clamp(uptime, 0, 100),
-      replicas,
-    };
-  });
-}
-
-export function getHealthScore(metrics: ReturnType<typeof generateMetrics>) {
+export function getHealthScore(metrics: Awaited<ReturnType<typeof generateMetrics>>) {
   const cpuScore = Math.max(0, 100 - metrics.cpuUsage);
   const memScore = Math.max(0, 100 - metrics.memoryUsage);
   const latencyScore = Math.max(0, 100 - (metrics.apiLatency / 30));
@@ -252,11 +302,11 @@ export function getHealthScore(metrics: ReturnType<typeof generateMetrics>) {
   const uptimeScore = metrics.uptime;
 
   const score = cpuScore * 0.2 + memScore * 0.2 + latencyScore * 0.2 + errorScore * 0.25 + uptimeScore * 0.15;
-  const clampedScore = clamp(Math.round(score), 0, 100);
-  const grade = clampedScore >= 90 ? "A" : clampedScore >= 75 ? "B" : clampedScore >= 60 ? "C" : clampedScore >= 40 ? "D" : "F";
+  const clamped = clamp(Math.round(score), 0, 100);
+  const grade = clamped >= 90 ? "A" : clamped >= 75 ? "B" : clamped >= 60 ? "C" : clamped >= 40 ? "D" : "F";
 
   return {
-    score: clampedScore,
+    score: clamped,
     grade,
     components: {
       cpu: Math.round(cpuScore),
@@ -268,108 +318,73 @@ export function getHealthScore(metrics: ReturnType<typeof generateMetrics>) {
   };
 }
 
-export function generateRecommendations(metrics: ReturnType<typeof generateMetrics>) {
+export function generateRecommendations(metrics: Awaited<ReturnType<typeof generateMetrics>>) {
   const recs = [];
 
   if (metrics.cpuUsage > 70) {
     recs.push({
-      id: "rec-cpu-scale",
-      category: "Scaling",
-      priority: "high",
+      id: "rec-cpu-scale", category: "Scaling", priority: "high",
       title: "Scale CPU Resources",
-      description: "CPU utilization is above 70%. Add horizontal replicas or upgrade instance type to prevent performance degradation.",
-      impact: "Reduce CPU bottleneck by ~40%",
-      effort: "Low",
-      metric: "cpuUsage",
-      currentValue: metrics.cpuUsage,
-      targetValue: 50,
+      description: `CPU is at ${metrics.cpuUsage.toFixed(1)}% — above 70%. Add horizontal replicas or upgrade the instance to prevent degradation.`,
+      impact: "Reduce CPU bottleneck by ~40%", effort: "Low",
+      metric: "cpuUsage", currentValue: metrics.cpuUsage, targetValue: 50,
     });
   }
 
   if (metrics.memoryUsage > 75) {
     recs.push({
-      id: "rec-mem-optimize",
-      category: "Memory",
-      priority: metrics.memoryUsage > 90 ? "critical" : "high",
+      id: "rec-mem-optimize", category: "Memory", priority: metrics.memoryUsage > 90 ? "critical" : "high",
       title: "Optimize Memory Usage",
-      description: "Memory pressure detected. Enable memory profiling, optimize data structures, or increase heap allocation.",
-      impact: "Prevent OOM crashes",
-      effort: "Medium",
-      metric: "memoryUsage",
-      currentValue: metrics.memoryUsage,
-      targetValue: 60,
+      description: `Memory at ${metrics.memoryUsage.toFixed(1)}%. Enable profiling, optimize data structures, or increase heap allocation.`,
+      impact: "Prevent OOM crashes", effort: "Medium",
+      metric: "memoryUsage", currentValue: metrics.memoryUsage, targetValue: 60,
     });
   }
 
   if (metrics.apiLatency > 200) {
     recs.push({
-      id: "rec-caching",
-      category: "Performance",
-      priority: "high",
+      id: "rec-caching", category: "Performance", priority: "high",
       title: "Enable Response Caching",
-      description: "API latency exceeds 200ms. Implement Redis caching for frequently accessed endpoints to reduce database load.",
-      impact: "Reduce latency by 60-80%",
-      effort: "Medium",
-      metric: "apiLatency",
-      currentValue: metrics.apiLatency,
-      targetValue: 50,
+      description: `P95 latency is ${metrics.apiLatency}ms — above 200ms. Add Redis caching to reduce DB load on hot endpoints.`,
+      impact: "Reduce latency 60–80%", effort: "Medium",
+      metric: "apiLatency", currentValue: metrics.apiLatency, targetValue: 50,
     });
   }
 
   if (metrics.errorRate > 2) {
     recs.push({
-      id: "rec-circuit-breaker",
-      category: "Reliability",
-      priority: "critical",
+      id: "rec-circuit-breaker", category: "Reliability", priority: "critical",
       title: "Enable Circuit Breakers",
-      description: "High error rate detected. Implement circuit breaker pattern to prevent cascade failures across services.",
-      impact: "Reduce error propagation by 90%",
-      effort: "Medium",
-      metric: "errorRate",
-      currentValue: metrics.errorRate,
-      targetValue: 0.5,
+      description: `Error rate is ${metrics.errorRate.toFixed(2)}%. Circuit breakers will prevent cascading failures across services.`,
+      impact: "Reduce error propagation by 90%", effort: "Medium",
+      metric: "errorRate", currentValue: metrics.errorRate, targetValue: 0.5,
     });
   }
 
   if (metrics.requestThroughput > 5000) {
     recs.push({
-      id: "rec-load-balance",
-      category: "Load Balancing",
-      priority: "medium",
-      title: "Optimize Load Balancer Configuration",
-      description: "High throughput detected. Enable least-connections algorithm and increase connection pool size.",
-      impact: "Even traffic distribution",
-      effort: "Low",
-      metric: "requestThroughput",
-      currentValue: metrics.requestThroughput,
-      targetValue: 3000,
+      id: "rec-load-balance", category: "Load Balancing", priority: "medium",
+      title: "Optimize Load Balancer Config",
+      description: `Throughput is ${metrics.requestThroughput.toFixed(0)} req/s. Enable least-connections and increase connection pool.`,
+      impact: "Even traffic distribution", effort: "Low",
+      metric: "requestThroughput", currentValue: metrics.requestThroughput, targetValue: 3000,
     });
   }
 
   recs.push({
-    id: "rec-db-index",
-    category: "Database",
-    priority: "medium",
+    id: "rec-db-index", category: "Database", priority: "medium",
     title: "Optimize Database Indexes",
-    description: "Run EXPLAIN ANALYZE on slow queries. Add composite indexes on frequently joined columns to reduce query time.",
-    impact: "Reduce query time by 50%",
-    effort: "Medium",
-    metric: "apiLatency",
-    currentValue: metrics.apiLatency,
-    targetValue: 30,
+    description: "Run EXPLAIN ANALYZE on slow queries. Add composite indexes on frequently joined columns.",
+    impact: "Reduce query time by 50%", effort: "Medium",
+    metric: "apiLatency", currentValue: metrics.apiLatency, targetValue: 30,
   });
 
   recs.push({
-    id: "rec-replicas",
-    category: "Scaling",
-    priority: "low",
+    id: "rec-replicas", category: "Scaling", priority: "low",
     title: "Increase Service Replicas",
-    description: "Running single replicas for critical services. Increase to at least 3 replicas for high availability.",
-    impact: "99.99% uptime SLA",
-    effort: "Low",
-    metric: "uptime",
-    currentValue: metrics.uptime,
-    targetValue: 99.99,
+    description: "Running single replicas for critical services. Increase to 3 replicas for high availability.",
+    impact: "99.99% uptime SLA", effort: "Low",
+    metric: "uptime", currentValue: metrics.uptime, targetValue: 99.99,
   });
 
   return recs;

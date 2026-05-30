@@ -3,6 +3,7 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { requestTrackerMiddleware } from "./lib/requestTracker";
 
 const app: Express = express();
 
